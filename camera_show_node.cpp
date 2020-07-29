@@ -19,7 +19,7 @@
 #include <time.h>
 
 #define PI 3.1415926
-#define CAP_TIME 100
+#define CAP_TIME 80
 
 int past_value = 0;
 int integralation = 0;
@@ -36,6 +36,8 @@ const int ControlH = 60;
 const int XHalf = (Width/2);
 const int YHalf = (Height/2);
 const int YPoint = 40;
+const int YCarP = -100;
+
 
 const int RoiWidth = 200;
 const int RoiHeight = 60;
@@ -200,15 +202,41 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
 	   cout << "\tNo RIght Line" << endl;
    }
    // y = mx + b ==> x0 = (y0-b)/m
-   float left_xPt_Y100 = ((YPoint - left_b_mem) / left_slope_mem);
-   float right_xPt_Y100 = ((YPoint - right_b_mem) / right_slope_mem);
+   float left_xPt_Y60 = ((- left_b_mem) / left_slope_mem);
+   float right_xPt_Y60 = ((- right_b_mem) / right_slope_mem);
 
-   float left_xPt_Y0 = ((left_b_mem)/left_slope_mem);
-   float rightt_xPt_Y0 = ((right_b_mem)/right_slope_mem);
-   *ldistance = XHalf - left_xPt_Y100;
-   *rdistance = right_xPt_Y100 - XHalf;
-   //*ldistance = (RoiWidth/2) - left_xPt_Y100;
-   //*rdistance = right_xPt_Y100 - (RoiWidth/2);
+   float left_xPt_Y0 = ((YCarP-left_b_mem)/left_slope_mem);
+   float right_xPt_Y0 = ((YCarP-right_b_mem)/right_slope_mem);
+   
+   float l1distance = XHalf - left_xPt_Y60;
+   float r1distance = right_xPt_Y60 - XHalf;
+   float lr1differ = l1distance - r1distance;
+   
+   float l2distance = XHalf - left_xPt_Y0;
+   float r2distance = right_xPt_Y0 - XHalf;
+
+   float lr2differ = l2distance - r2distance;   
+	if(abs(lr1differ)<3&&abs(lr2differ)<3){
+		*ldistance = 0;
+        	*rdistance = 0;
+	}
+   else if(lr1differ <=0 && lr2differ <=0){
+      //return lr2differ;
+	*ldistance = l2distance;
+	*rdistance = r2distance;
+   }else if(lr1differ <=0 && lr2differ > 0){
+      //return lr1differ;
+	*ldistance = l1distance;
+        *rdistance = r1distance;
+   }else if(lr1differ>0 && lr2differ <=0){
+      //return lr1differ;
+	*ldistance = l1distance;
+        *rdistance = r1distance;
+   }else if(lr1differ>0 && lr2differ >0){
+      *ldistance = l2distance;
+        *rdistance = r2distance;
+   }
+   //return (lr1differ+lr2differ)/2;
 }
 
 
@@ -243,11 +271,11 @@ int img_process(Mat &frame)
 #endif
 	float ldistance, rdistance;
 	find_lines(roi, left_lines, right_lines, &rdistance, &ldistance);
-	
-	int differ = ldistance - rdistance;
-	differ=(ldistance*4.5)-(rdistance*4.5);//differ to float`
+	//differ = 4.5*differ;
+        //int differ = ldistance - rdistance;
+	int differ=(ldistance*4.5)-(rdistance*4.5);//differ to float`
 #ifdef CAMERA_SHOW
-    circle (roi, Point(RoiWidth/2, YPoint), 5, Scalar(250,250,250),-1);
+    circle (roi, Point(XHalf, YPoint), 5, Scalar(250,250,250),-1);
 	circle(roi, Point(XHalf + (int)differ/4.5, YPoint), 5, Scalar(0, 0, 255), 2);
     putText(roi,format("%3d - %3d = %f",(int)rdistance, (int)ldistance, (int)differ/4.5),Point(XHalf-100,YHalf/2),FONT_HERSHEY_SIMPLEX,0.5,Yellow,2);
 	imshow("roi",roi);
@@ -292,7 +320,7 @@ clock_t curr_t, elasp_t;
   //clock_t tStart = clock();
   for(;;){
 	curr_t = clock();
-        if (curr_t == (elasp_t + CAP_TIME)) {
+        if (curr_t >= (elasp_t + CAP_TIME)) {
             cout << CAP_TIME << "ms elasp" << endl;
             elasp_t = curr_t;
             continue;
