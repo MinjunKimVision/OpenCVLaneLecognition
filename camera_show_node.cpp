@@ -19,13 +19,12 @@
 #include <time.h>
 
 #define PI 3.1415926
-#define CAP_TIME 80
+#define CAP_TIME 100
 
 int past_value = 0;
 int integralation = 0;
 int derivative = 0;
-float p_value = 0.20, i_value = 0.00, d_value = 0.70;
-
+float p_value = 0.2, i_value = 0.00, d_value = 0.7;
 
 using namespace std;
 using namespace cv;
@@ -35,12 +34,15 @@ const int Height = 240;
 const int ControlH = 60;
 const int XHalf = (Width/2);
 const int YHalf = (Height/2);
-const int YPoint = 40;
-const int YCarP = -100;
-
+const int YPoint = 20;
+const int YCarP = 80;
 
 const int RoiWidth = 200;
 const int RoiHeight = 60;
+
+const int Roiwidth_left = 50;
+const int Roiwidth_right = 240;
+const int XPoint = (Roiwidth_right / 2);
 
 const float slope_threshold = 0.4;
 const Scalar Red = Scalar(0, 0, 255);
@@ -55,7 +57,7 @@ int pid(int value) {
     //std::cout<<pid_value;
     pid_value = pid_value;
     past_value = value;
-    integralation += derivative;
+    //integralation += derivative;
     // when sended stop signal
     if (value == 9999) {
         //spd = 0;
@@ -64,31 +66,17 @@ int pid(int value) {
     return pid_value;
 }
 
-
 void show_lines(Mat &img, vector<Vec4i> &lines, Scalar color = Scalar(0, 0, 0),int thickness=1)
-
 {
-
 	bool color_gen = false;
-
-
-
 	if (color == Scalar(0, 0, 0))
-
 		color_gen = true;
-
 	for (int i = 0; i < lines.size(); i++)
-
 	{
-
 		if (color_gen == true)
-
 			color = Scalar(rand() % 256, rand() % 256, rand() % 256);
-
 		line(img, Point(lines[i][0], lines[i][1]), Point(lines[i][2], lines[i][3]), color, thickness);
-
 	}
-
 }
 
 
@@ -138,12 +126,9 @@ void  split_left_right(vector<Vec4i> lines, vector<Vec4i>&left_lines, vector<Vec
 
 bool find_line_params(vector<Vec4i> &left_lines, float *left_m, float *left_b)
 {
-
 	float  left_avg_x = 0, left_avg_y = 0, left_avg_slope = 0;
-
 	if(left_lines.size() == 0)
 		return false;
-	
 	for (int i = 0; i < left_lines.size(); i++)//calculate right avg of x and y and slope
 	{
 		//line(roi, Point(left_lines[i][0],left_lines[i][1]), Point(left_lines[i][2],left_lines[i][3]), color, 3);
@@ -202,8 +187,8 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
 	   cout << "\tNo RIght Line" << endl;
    }
    // y = mx + b ==> x0 = (y0-b)/m
-   float left_xPt_Y60 = ((- left_b_mem) / left_slope_mem);
-   float right_xPt_Y60 = ((- right_b_mem) / right_slope_mem);
+   float left_xPt_Y60 = ((-left_b_mem) / left_slope_mem);
+   float right_xPt_Y60 = ((-right_b_mem) / right_slope_mem);
 
    float left_xPt_Y0 = ((YCarP-left_b_mem)/left_slope_mem);
    float right_xPt_Y0 = ((YCarP-right_b_mem)/right_slope_mem);
@@ -222,8 +207,8 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
 	}
    else if(lr1differ <=0 && lr2differ <=0){
       //return lr2differ;
-	*ldistance = l2distance;
-	*rdistance = r2distance;
+	*ldistance = l2distance*1.2;
+	*rdistance = r2distance*1.2;
    }else if(lr1differ <=0 && lr2differ > 0){
       //return lr1differ;
 	*ldistance = l1distance;
@@ -233,8 +218,8 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
 	*ldistance = l1distance;
         *rdistance = r1distance;
    }else if(lr1differ>0 && lr2differ >0){
-      *ldistance = l2distance;
-        *rdistance = r2distance;
+      *ldistance = l2distance*1.2;
+        *rdistance = r2distance*1.2;
    }
    //return (lr1differ+lr2differ)/2;
 }
@@ -252,12 +237,11 @@ int img_process(Mat &frame)
     //bilatrealFilter(grayframe,grayframe,3,250,10,BORDER_DEFAULT);//bilateral
     GaussianBlur(grayframe, grayframe,Size(3,3),1.5);	
     cvtColor(grayframe, roi_gray_ch3, COLOR_GRAY2BGR);
+    threshold(grayframe, grayframe,140,255,THRESH_BINARY);
     Canny(grayframe,edge_frame,30,150,3); //min_val, max val , filter size
-                  
-     //line check   -inwoo
     
     vector<cv::Vec4i> lines_set;
-  
+    
     cv::HoughLinesP(edge_frame,lines_set,1,PI/180,30,20,10);
 #ifdef CAMERA_SHOW_MORE
 	show_lines(roi_gray_ch3, lines_set);
