@@ -1,5 +1,5 @@
 #define ROS
-#define CAMERA_SHOW
+//#define CAMERA_SHOW
 //#define CAMERA_SHOW_MORE
 
 #ifdef ROS
@@ -11,15 +11,24 @@
 #include "std_msgs/Int16.h"
 
 #endif
-
 #include <cv.hpp>
+/*#include "opencv2/core.hpp"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/features2d.hpp>//일반적으로 사용하는 OpenCV 헤더들
+*/
+
 #include <iostream>
 #include <stdio.h>
 #include <fcntl.h>
 #include <time.h>
 
+
+
 #define PI 3.1415926
 #define CAP_TIME 100
+
 #define ConnerHand 0.8
 #define StraightHand 5
 
@@ -35,8 +44,8 @@ using namespace cv;
 const int Width = 320;
 const int Height = 240;
 const int ControlH = 60;
-const int XHalf = (Width/2);
-const int YHalf = (Height/2);
+const int XHalf = (Width / 2);
+const int YHalf = (Height / 2);
 const int YPoint = 40;
 const int YCarP = 0;
 
@@ -54,21 +63,21 @@ const Scalar Pink = Scalar(220, 110, 230);
 float ldistance, rdistance;
 
 int pid(int value) {
-    derivative = value - past_value;
-    int pid_value = float(p_value * value) + float(i_value * integralation) + float(d_value * derivative);
-    //std::cout<<pid_value;
-    pid_value = pid_value;
-    past_value = value;
-    //integralation += derivative;
-    // when sended stop signal
-    if (value == 9999) {
-        //spd = 0;
-        pid_value = 0;
-    }
-    return pid_value;
+	derivative = value - past_value;
+	int pid_value = float(p_value * value) + float(i_value * integralation) + float(d_value * derivative);
+	//std::cout<<pid_value;
+	pid_value = pid_value;
+	past_value = value;
+	//integralation += derivative;
+	// when sended stop signal
+	if (value == 9999) {
+		//spd = 0;
+		pid_value = 0;
+	}
+	return pid_value;
 }
 
-void show_lines(Mat &img, vector<Vec4i> &lines, Scalar color = Scalar(0, 0, 0),int thickness=1)
+void show_lines(Mat& img, vector<Vec4i>& lines, Scalar color = Scalar(0, 0, 0), int thickness = 1)
 {
 	bool color_gen = false;
 	if (color == Scalar(0, 0, 0))
@@ -83,7 +92,7 @@ void show_lines(Mat &img, vector<Vec4i> &lines, Scalar color = Scalar(0, 0, 0),i
 
 
 
-void  split_left_right(vector<Vec4i> lines, vector<Vec4i>&left_lines, vector<Vec4i> &right_lines)
+void  split_left_right(vector<Vec4i> lines, vector<Vec4i>& left_lines, vector<Vec4i>& right_lines)
 {
 	vector<float> slopes;
 	vector<Vec4i> new_lines;
@@ -126,10 +135,10 @@ void  split_left_right(vector<Vec4i> lines, vector<Vec4i>&left_lines, vector<Vec
 	}
 }
 
-bool find_line_params(vector<Vec4i> &left_lines, float *left_m, float *left_b)
+bool find_line_params(vector<Vec4i>& left_lines, float* left_m, float* left_b)
 {
 	float  left_avg_x = 0, left_avg_y = 0, left_avg_slope = 0;
-	if(left_lines.size() == 0)
+	if (left_lines.size() == 0)
 		return false;
 	for (int i = 0; i < left_lines.size(); i++)//calculate right avg of x and y and slope
 	{
@@ -153,99 +162,133 @@ bool find_line_params(vector<Vec4i> &left_lines, float *left_m, float *left_b)
 }
 
 
-void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_lines, float *rdistance, float *ldistance)
+void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_lines, float* rdistance, float* ldistance)
 {
 	static float left_slope_mem = 1, right_slope_mem = 1, right_b_mem = 0, left_b_mem = 0;
 
-   float left_b, right_b, left_m, right_m;
-   
-   bool draw_left = find_line_params(left_lines, &left_m, &left_b);
-   if (draw_left) {
-	   float left_x0 = (-left_b) / left_m;
-	   float left_x120 = ((YHalf-ControlH) - left_b) / left_m;
-	   left_slope_mem = left_m;
-	   left_b_mem = left_b;
+	float left_b, right_b, left_m, right_m;
+
+	bool draw_left = find_line_params(left_lines, &left_m, &left_b);
+	if (draw_left) {
+		float left_x0 = (-left_b) / left_m;
+		float left_x120 = ((YHalf - ControlH) - left_b) / left_m;
+		left_slope_mem = left_m;
+		left_b_mem = left_b;
 #ifdef CAMERA_SHOW
-	   line(img, Point(left_x0, 0), Point(left_x120, YHalf), Blue,5);
-	   cout << left_lines.size() << " left lines,";
+		line(img, Point(left_x0, 0), Point(left_x120, YHalf), Blue, 5);
+		cout << left_lines.size() << " left lines,";
 #endif 
-   }
-   else {
-	   cout << "\tNo Left Line,";
-   }
-
-   bool draw_right = find_line_params(right_lines, &right_m, &right_b);
-   if (draw_right) {
-	   float right_x0 = (-right_b) / right_m;
-	   float right_x120 = ((YHalf-ControlH) - right_b) / right_m;
-	   right_slope_mem = right_m;
-	   right_b_mem = right_b;
-#ifdef CAMERA_SHOW
-	   line(img, Point(right_x0, 0), Point(right_x120, YHalf), Red, 5);
-#endif
-	   cout << right_lines.size() << " right lines" <<endl;
-   }
-   else {
-	   cout << "\tNo RIght Line" << endl;
-   }
-   // y = mx + b ==> x0 = (y0-b)/m
-   float left_xPt_Y60 = ((-left_b_mem) / left_slope_mem);
-   float right_xPt_Y60 = ((-right_b_mem) / right_slope_mem);
-
-   float left_xPt_Y0 = ((YCarP-left_b_mem)/left_slope_mem);
-   float right_xPt_Y0 = ((YCarP-right_b_mem)/right_slope_mem);
-   
-   float l1distance = RoiXHalf - left_xPt_Y60;
-   float r1distance = right_xPt_Y60 - RoiXHalf;
-   float lr1differ = l1distance - r1distance;
-   
-   float l2distance = RoiXHalf - left_xPt_Y0;
-   float r2distance = right_xPt_Y0 - RoiXHalf;
-
-   float lr2differ = l2distance - r2distance;   
-	if(abs(lr1differ)<StraightHand&&abs(lr2differ)<StraightHand){
-		*ldistance = l1distance/2;
-        	*rdistance = r1distance/2;
-		cout<<"--Straight--"<<endl;
 	}
-   else if(lr1differ <=0 && lr2differ <=0){
-      //return lr2differ;
-	*ldistance = l1distance;
-	*rdistance = r1distance;
-   }else if(lr1differ <=0 && lr2differ > 0){
-      //return lr1differ;
-	*ldistance = l1distance;
-        *rdistance = r1distance;
-   }else if(lr1differ>0 && lr2differ <=0){
-      //return lr1differ;
-	*ldistance = l1distance;
-        *rdistance = r1distance;
-   }else if(lr1differ>0 && lr2differ >0){
-      *ldistance = l1distance;
-       *rdistance = r1distance;
-   }
-   //return (lr1differ+lr2differ)/2;
+	else {
+		cout << "\tNo Left Line,";
+	}
+
+	bool draw_right = find_line_params(right_lines, &right_m, &right_b);
+	if (draw_right) {
+		float right_x0 = (-right_b) / right_m;
+		float right_x120 = ((YHalf - ControlH) - right_b) / right_m;
+		right_slope_mem = right_m;
+		right_b_mem = right_b;
+#ifdef CAMERA_SHOW
+		line(img, Point(right_x0, 0), Point(right_x120, YHalf), Red, 5);
+#endif
+		cout << right_lines.size() << " right lines" << endl;
+	}
+	else {
+		cout << "\tNo RIght Line" << endl;
+	}
+	// y = mx + b ==> x0 = (y0-b)/m
+	float left_xPt_Y60 = ((-left_b_mem) / left_slope_mem);
+	float right_xPt_Y60 = ((-right_b_mem) / right_slope_mem);
+
+	float left_xPt_Y0 = ((YCarP - left_b_mem) / left_slope_mem);
+	float right_xPt_Y0 = ((YCarP - right_b_mem) / right_slope_mem);
+
+	float l1distance = RoiXHalf - left_xPt_Y60;
+	float r1distance = right_xPt_Y60 - RoiXHalf;
+	float lr1differ = l1distance - r1distance;
+
+	float l2distance = RoiXHalf - left_xPt_Y0;
+	float r2distance = right_xPt_Y0 - RoiXHalf;
+
+	float lr2differ = l2distance - r2distance;
+	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand) {
+		*ldistance = l1distance / 2;
+		*rdistance = r1distance / 2;
+		cout << "--Straight--" << endl;
+	}
+	else if (lr1differ <= 0 && lr2differ <= 0) {
+		//return lr2differ;
+		*ldistance = l1distance;
+		*rdistance = r1distance;
+	}
+	else if (lr1differ <= 0 && lr2differ > 0) {
+		//return lr1differ;
+		*ldistance = l1distance;
+		*rdistance = r1distance;
+	}
+	else if (lr1differ > 0 && lr2differ <= 0) {
+		//return lr1differ;
+		*ldistance = l1distance;
+		*rdistance = r1distance;
+	}
+	else if (lr1differ > 0 && lr2differ > 0) {
+		*ldistance = l1distance;
+		*rdistance = r1distance;
+	}
+	//return (lr1differ+lr2differ)/2;
 }
 
 
-int img_process(Mat &frame)
+int img_process(Mat& frame)
 {
-    Mat grayframe, edge_frame, roi_gray_ch3;
+	Mat grayframe, edge_frame, roi_gray_ch3;
 	Mat roi;
-    //cvtColor(frame, grayframe, COLOR_BGR2GRAY);
-    Rect rect_roi(RoiWidth_left,YHalf,RoiWidth_right,YHalf-ControlH);
-    roi = frame(rect_roi);
-    //imshow("frame",frame);
-    cvtColor(roi,grayframe,COLOR_BGR2GRAY) ;
-    //bilatrealFilter(grayframe,grayframe,3,250,10,BORDER_DEFAULT);//bilateral
-    GaussianBlur(grayframe, grayframe,Size(3,3),1.5);	
-    cvtColor(grayframe, roi_gray_ch3, COLOR_GRAY2BGR);
-    threshold(grayframe, grayframe,140,255,THRESH_BINARY);
-    Canny(grayframe,edge_frame,30,150,3); //min_val, max val , filter size
-    
-    vector<cv::Vec4i> lines_set;
-    
-    cv::HoughLinesP(edge_frame,lines_set,1,PI/180,30,20,10);
+	Mat kernel = Mat::ones(5, 5, CV_8U);
+	Mat processed;
+	Mat close, open;
+	//Mat Th;
+	//cvtColor(frame, grayframe, COLOR_BGR2GRAY);
+	Rect rect_roi(RoiWidth_left, YHalf, RoiWidth_right, YHalf - ControlH);
+	roi = frame(rect_roi);
+
+	/*Point2f srcVertices[4];
+	srcVertices[0] = Point(35, 2);//왼쪽 위x,y
+	srcVertices[1] = Point(301, 2);//오른쪽 위x,y
+	srcVertices[2] = Point(306, 58);//오른쪽 아래x,y
+	srcVertices[3] = Point(29, 58);//왼쪽 아래x,y
+	Point2f dstVertices[4];
+	dstVertices[0] = Point(0, 0);
+	dstVertices[1] = Point(320, 0);
+	dstVertices[2] = Point(320, 240);
+	dstVertices[3] = Point(0, 240);
+	Mat perspectiveMatrix = getPerspectiveTransform(srcVertices, dstVertices);
+	Mat dst(240, 320, CV_8UC3); //Destination for warped image
+	Mat invertedPerspectiveMatrix;
+	invert(perspectiveMatrix, invertedPerspectiveMatrix);
+	warpPerspective(roi, dst, perspectiveMatrix, dst.size(), INTER_LINEAR, BORDER_CONSTANT);*/
+	//imshow("BirdEyeView", dst);
+	//imshow("frame",frame);
+	cvtColor(roi, grayframe, COLOR_BGR2GRAY);
+	//bilatrealFilter(grayframe,grayframe,3,250,10,BORDER_DEFAULT);//bilateral
+	cvtColor(grayframe, roi_gray_ch3, COLOR_GRAY2BGR);
+	dilate(grayframe, processed, kernel);
+	erode(grayframe, processed, kernel);
+	/*morphologyEx(processed, open, MORPH_OPEN, kernel);
+	adaptiveThreshold(open, open, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);*/
+	//imshow("adaptiveThreshold_Open", open);
+	morphologyEx(processed, close, MORPH_CLOSE, kernel);
+	adaptiveThreshold(close, close, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
+//	imshow("adaptiveThreshold_Close", close);
+	//threshold(grayframe, Th, 140, 255, THRESH_BINARY);
+	//imshow("Threshold", Th);
+	//adaptiveThreshold(dst, dst, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
+	//imshow("adaptiveThreshold_BirdEye", dst);
+	Canny(close, edge_frame, 30, 150, 3); //min_val, max val , filter size
+
+	vector<cv::Vec4i> lines_set;
+
+	cv::HoughLinesP(edge_frame, lines_set, 1, PI / 180, 30, 20, 10);
 #ifdef CAMERA_SHOW_MORE
 	show_lines(roi_gray_ch3, lines_set);
 #endif
@@ -259,14 +302,14 @@ int img_process(Mat &frame)
 	//float ldistance, rdistance;
 	find_lines(roi, left_lines, right_lines, &rdistance, &ldistance);
 	//differ = 4.5*differ;
-        //int differ = ldistance - rdistance;
-	int differ=(ldistance*ConnerHand)-(rdistance*ConnerHand);//differ to float`
+		//int differ = ldistance - rdistance;
+	int differ = (ldistance * ConnerHand) - (rdistance * ConnerHand);//differ to float`
 #ifdef CAMERA_SHOW
-    circle (roi, Point(RoiXHalf, YPoint), 5, Scalar(250,250,250),-1);
-	circle(roi, Point(RoiXHalf + (int)differ/4.5, YPoint), 5, Scalar(0, 0, 255), 2);
-    putText(roi,format("%3d - %3d = %f",(int)rdistance, (int)ldistance, (int)differ/4.5),Point(RoiXHalf-100,YHalf/2),FONT_HERSHEY_SIMPLEX,0.5,Yellow,2);
-	imshow("roi",roi);
-//      imshow("edgeframe",edge_frame);
+	circle(roi, Point(RoiXHalf, YPoint), 5, Scalar(250, 250, 250), -1);
+	circle(roi, Point(RoiXHalf + (int)differ / 4.5, YPoint), 5, Scalar(0, 0, 255), 2);
+	putText(roi, format("%3d - %3d = %f", (int)rdistance, (int)ldistance, (int)differ / 4.5), Point(RoiXHalf - 100, YHalf / 2), FONT_HERSHEY_SIMPLEX, 0.5, Yellow, 2);
+	imshow("roi", roi);
+	//      imshow("edgeframe",edge_frame);
 #endif
 #ifdef CAMERA_SHOW_MORE
 //	imshow("frame", frame);
@@ -276,72 +319,70 @@ int img_process(Mat &frame)
 	return differ;
 }
 
-int main(int argc, char**argv)
+int main(int argc, char** argv)
 {
 	VideoCapture cap(0);//cameara_input
-
+	//VideoCapture cap("C:/Users/GeeksMethod/source/repos/RegisTest/x64/Debug/clockwise.mp4");
   //VideoCapture cap("/home/cseecar/catkin_ws/video/clockwise.mp4");
-  Mat frame;
-
-  if(!cap.isOpened()){
-    std::cout<<"no camera!"<< std::endl;
-    return -1;
-  }
-
+	Mat frame;
+	Mat img;
+	if (!cap.isOpened()) {
+		std::cout << "no camera!" << std::endl;
+		return -1;
+	}
 #ifdef ROS
-  ros::init(argc, argv, "cam_msg_publisher");
-  ros::NodeHandle nh;
-  std_msgs::Int16 cam_msg;
-  ros::Publisher pub = nh.advertise<std_msgs::Int16>("cam_msg",100);
+	ros::init(argc, argv, "cam_msg_publisher");
+	ros::NodeHandle nh;
+	std_msgs::Int16 cam_msg;
+	ros::Publisher pub = nh.advertise<std_msgs::Int16>("cam_msg", 100);
 
-  int init_past=1;
-  //--------------------------------------------------
-  ros::Rate loop_rate(50);
-  cout<<"start"<<endl;
+	int init_past = 1;
+	//--------------------------------------------------
+	ros::Rate loop_rate(50);
+	cout << "start" << endl;
 #endif
 
-  int differ, key, fr_no = 0;
-  bool capture = true;
-clock_t curr_t, elasp_t;
-    elasp_t = clock();
-  //clock_t tStart = clock();
-  for(;;){
-	curr_t = clock();
-        if (curr_t >= (elasp_t + CAP_TIME)) {
-            cout << CAP_TIME << "ms elasp" << endl;
-            elasp_t = curr_t;
-            continue;
-	}
-	if (capture) {
-		  cap >> frame;
-		  if (frame.empty())
-			  break;
-	}
-
-	if ((key = waitKey(30)) >= 0) {
-		if (key == 27)
-			break;
-		else if (key = ' ') {
-			capture = !capture;
+	int differ, key, fr_no = 0;
+	bool capture = true;
+	clock_t curr_t, elasp_t;
+	elasp_t = clock();
+	//clock_t tStart = clock();
+	for (;;) {
+		curr_t = clock();
+		if (curr_t >= (elasp_t + CAP_TIME)) {
+			cout << CAP_TIME << "ms elasp" << endl;
+			elasp_t = curr_t;
+			continue;
 		}
+		if (capture) {
+			cap >> frame;
+			if (frame.empty())
+				break;
+		}
+
+		if ((key = waitKey(30)) >= 0) {
+			if (key == 27)
+				break;
+			else if (key = ' ') {
+				capture = !capture;
+			}
+		}
+
+		if (capture == false)
+			continue;
+
+		fr_no++;
+		resize(frame, frame, Size(Width, Height));
+		differ = img_process(frame);
+#ifdef ROS
+		cam_msg.data = differ;
+		pub.publish(cam_msg);
+		loop_rate.sleep();
+#else
+		std::cout << fr_no << ":" << differ << endl;
+#endif
 	}
 
-	if (capture == false)
-		continue;
-
-	fr_no++;
-    resize(frame,frame,Size(Width,Height));
-    differ = img_process(frame);
-#ifdef ROS
-	cam_msg.data = differ; 
-    pub.publish(cam_msg);
-    loop_rate.sleep();
-#else
-	std::cout << fr_no << ":" << differ << endl;
-#endif
-  }
-
-  std::cout<<"Camera off"<<endl;
-  return 0;
+	std::cout << "Camera off" << endl;
+	return 0;
 }
-
