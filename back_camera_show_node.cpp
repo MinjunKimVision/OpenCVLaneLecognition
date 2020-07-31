@@ -1,5 +1,5 @@
 #define ROS
-#define CAMERA_SHOW
+//#define CAMERA_SHOW
 //#define CAMERA_SHOW_MORE
 
 #ifdef ROS
@@ -20,29 +20,29 @@
 
 #define PI 3.1415926
 #define CAP_TIME 100
-#define ConnerHand 0.8
-#define StraightHand 5
 
 int past_value = 0;
 int integralation = 0;
 int derivative = 0;
-float p_value = 0.4, i_value = 0.00, d_value = 0.6;
+float p_value = 0.2, i_value = 0.00, d_value = 0.7;
 
 using namespace std;
 using namespace cv;
-
 
 const int Width = 320;
 const int Height = 240;
 const int ControlH = 60;
 const int XHalf = (Width/2);
 const int YHalf = (Height/2);
-const int YPoint = 40;
-const int YCarP = 0;
+const int YPoint = 20;
+const int YCarP = 80;
 
-const int RoiWidth_left = 0;
-const int RoiWidth_right = 320;
-const int RoiXHalf = (RoiWidth_right / 2);
+const int RoiWidth = 200;
+const int RoiHeight = 60;
+
+const int Roiwidth_left = 50;
+const int Roiwidth_right = 240;
+const int XPoint = (Roiwidth_right / 2);
 
 const float slope_threshold = 0.4;
 const Scalar Red = Scalar(0, 0, 255);
@@ -50,8 +50,6 @@ const Scalar Blue = Scalar(255, 0, 0);
 const Scalar Yellow = Scalar(50, 250, 250);
 const Scalar Sky = Scalar(215, 200, 60);
 const Scalar Pink = Scalar(220, 110, 230);
-
-float ldistance, rdistance;
 
 int pid(int value) {
     derivative = value - past_value;
@@ -119,9 +117,9 @@ void  split_left_right(vector<Vec4i> lines, vector<Vec4i>&left_lines, vector<Vec
 		int x2 = line[2];
 		int y2 = line[3];
 
-		if (slope > 0 && x1 > RoiXHalf && x2 > RoiXHalf)//
+		if (slope > 0 && x1 > XHalf && x2 > XHalf)//
 			right_lines.push_back(line);
-		else if (slope < 0 && x1 < RoiXHalf && x2 < RoiXHalf)//slope < 0 && x1 < cx && x2 < cx
+		else if (slope < 0 && x1 < XHalf && x2 < XHalf)//slope < 0 && x1 < cx && x2 < cx
 			left_lines.push_back(line);
 	}
 }
@@ -195,23 +193,22 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
    float left_xPt_Y0 = ((YCarP-left_b_mem)/left_slope_mem);
    float right_xPt_Y0 = ((YCarP-right_b_mem)/right_slope_mem);
    
-   float l1distance = RoiXHalf - left_xPt_Y60;
-   float r1distance = right_xPt_Y60 - RoiXHalf;
+   float l1distance = XHalf - left_xPt_Y60;
+   float r1distance = right_xPt_Y60 - XHalf;
    float lr1differ = l1distance - r1distance;
    
-   float l2distance = RoiXHalf - left_xPt_Y0;
-   float r2distance = right_xPt_Y0 - RoiXHalf;
+   float l2distance = XHalf - left_xPt_Y0;
+   float r2distance = right_xPt_Y0 - XHalf;
 
    float lr2differ = l2distance - r2distance;   
-	if(abs(lr1differ)<StraightHand&&abs(lr2differ)<StraightHand){
-		*ldistance = l1distance/2;
-        	*rdistance = r1distance/2;
-		cout<<"--Straight--"<<endl;
+	if(abs(lr1differ)<3&&abs(lr2differ)<3){
+		*ldistance = 0;
+        	*rdistance = 0;
 	}
    else if(lr1differ <=0 && lr2differ <=0){
       //return lr2differ;
-	*ldistance = l1distance;
-	*rdistance = r1distance;
+	*ldistance = l2distance*1.2;
+	*rdistance = r2distance*1.2;
    }else if(lr1differ <=0 && lr2differ > 0){
       //return lr1differ;
 	*ldistance = l1distance;
@@ -221,8 +218,8 @@ void find_lines(Mat &img, vector<cv::Vec4i> &left_lines, vector<Vec4i>& right_li
 	*ldistance = l1distance;
         *rdistance = r1distance;
    }else if(lr1differ>0 && lr2differ >0){
-      *ldistance = l1distance;
-       *rdistance = r1distance;
+      *ldistance = l2distance*1.2;
+        *rdistance = r2distance*1.2;
    }
    //return (lr1differ+lr2differ)/2;
 }
@@ -233,7 +230,7 @@ int img_process(Mat &frame)
     Mat grayframe, edge_frame, roi_gray_ch3;
 	Mat roi;
     //cvtColor(frame, grayframe, COLOR_BGR2GRAY);
-    Rect rect_roi(RoiWidth_left,YHalf,RoiWidth_right,YHalf-ControlH);
+    Rect rect_roi(0,YHalf,Width,YHalf-ControlH);
     roi = frame(rect_roi);
     //imshow("frame",frame);
     cvtColor(roi,grayframe,COLOR_BGR2GRAY) ;
@@ -256,15 +253,15 @@ int img_process(Mat &frame)
 	show_lines(roi, left_lines, Sky, 2);
 	show_lines(roi, right_lines, Pink, 2);
 #endif
-	//float ldistance, rdistance;
+	float ldistance, rdistance;
 	find_lines(roi, left_lines, right_lines, &rdistance, &ldistance);
 	//differ = 4.5*differ;
         //int differ = ldistance - rdistance;
-	int differ=(ldistance*ConnerHand)-(rdistance*ConnerHand);//differ to float`
+	int differ=(ldistance*4.5)-(rdistance*4.5);//differ to float`
 #ifdef CAMERA_SHOW
-    circle (roi, Point(RoiXHalf, YPoint), 5, Scalar(250,250,250),-1);
-	circle(roi, Point(RoiXHalf + (int)differ/4.5, YPoint), 5, Scalar(0, 0, 255), 2);
-    putText(roi,format("%3d - %3d = %f",(int)rdistance, (int)ldistance, (int)differ/4.5),Point(RoiXHalf-100,YHalf/2),FONT_HERSHEY_SIMPLEX,0.5,Yellow,2);
+    circle (roi, Point(XHalf, YPoint), 5, Scalar(250,250,250),-1);
+	circle(roi, Point(XHalf + (int)differ/4.5, YPoint), 5, Scalar(0, 0, 255), 2);
+    putText(roi,format("%3d - %3d = %f",(int)rdistance, (int)ldistance, (int)differ/4.5),Point(XHalf-100,YHalf/2),FONT_HERSHEY_SIMPLEX,0.5,Yellow,2);
 	imshow("roi",roi);
 //      imshow("edgeframe",edge_frame);
 #endif
@@ -272,7 +269,7 @@ int img_process(Mat &frame)
 //	imshow("frame", frame);
 //	imshow("roi_gray_ch3", roi_gray_ch3);
 #endif
-	//differ = pid(differ);
+	differ = pid(differ);
 	return differ;
 }
 
