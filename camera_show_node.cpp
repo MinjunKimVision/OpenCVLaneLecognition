@@ -27,10 +27,10 @@
 
 
 #define PI 3.1415926
-#define CAP_TIME 100
+#define CAP_TIME 40
 
 #define ConnerHand 0.8
-#define StraightHand 5
+#define StraightHand 6
 
 int past_value = 0;
 int integralation = 0;
@@ -212,7 +212,7 @@ void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_li
 	float r2distance = right_xPt_Y0 - RoiXHalf;
 
 	float lr2differ = l2distance - r2distance;
-	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand) {
+	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand+1) {
 		*ldistance = l1distance / 2;
 		*rdistance = r1distance / 2;
 		cout << "--Straight--" << endl;
@@ -244,7 +244,7 @@ int img_process(Mat& frame)
 {
 	Mat grayframe, edge_frame, roi_gray_ch3;
 	Mat roi;
-	Mat kernel = Mat::ones(5, 5, CV_8U);
+	Mat kernel = Mat::ones(7, 7, CV_8U);
 	Mat processed;
 	Mat close, open;
 	//Mat Th;
@@ -272,23 +272,22 @@ int img_process(Mat& frame)
 	cvtColor(roi, grayframe, COLOR_BGR2GRAY);
 	//bilatrealFilter(grayframe,grayframe,3,250,10,BORDER_DEFAULT);//bilateral
 	cvtColor(grayframe, roi_gray_ch3, COLOR_GRAY2BGR);
-	dilate(grayframe, processed, kernel);
-	erode(grayframe, processed, kernel);
+	//dilate(grayframe, processed, kernel);
+	//erode(grayframe, processed, kernel);
 	/*morphologyEx(processed, open, MORPH_OPEN, kernel);
-	adaptiveThreshold(open, open, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);*/
+	adaptiveThreshold(open, open, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, -2);*/
 	//imshow("adaptiveThreshold_Open", open);
-	morphologyEx(processed, close, MORPH_CLOSE, kernel);
-	adaptiveThreshold(close, close, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
-//	imshow("adaptiveThreshold_Close", close);
+	morphologyEx(grayframe, close, MORPH_CLOSE, kernel);
+	adaptiveThreshold(close, close, 180, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, -2.3);
 	//threshold(grayframe, Th, 140, 255, THRESH_BINARY);
 	//imshow("Threshold", Th);
 	//adaptiveThreshold(dst, dst, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
 	//imshow("adaptiveThreshold_BirdEye", dst);
-	Canny(close, edge_frame, 30, 150, 3); //min_val, max val , filter size
+	//Canny(open, edge_frame, 80, 230, 7); //min_val, max val , filter size
 
 	vector<cv::Vec4i> lines_set;
 
-	cv::HoughLinesP(edge_frame, lines_set, 1, PI / 180, 30, 20, 10);
+	cv::HoughLinesP(close, lines_set, 1, PI / 180, 30, 25, 5);
 #ifdef CAMERA_SHOW_MORE
 	show_lines(roi_gray_ch3, lines_set);
 #endif
@@ -309,14 +308,16 @@ int img_process(Mat& frame)
 	circle(roi, Point(RoiXHalf + (int)differ / 4.5, YPoint), 5, Scalar(0, 0, 255), 2);
 	putText(roi, format("%3d - %3d = %f", (int)rdistance, (int)ldistance, (int)differ / 4.5), Point(RoiXHalf - 100, YHalf / 2), FONT_HERSHEY_SIMPLEX, 0.5, Yellow, 2);
 	imshow("roi", roi);
-	//      imshow("edgeframe",edge_frame);
+	//imshow("Open",open);
+	imshow("Close",close);
+	//imshow("edgeframe",edge_frame);
 #endif
 #ifdef CAMERA_SHOW_MORE
 //	imshow("frame", frame);
 //	imshow("roi_gray_ch3", roi_gray_ch3);
 #endif
 	//differ = pid(differ);
-	return differ;
+	return differ+11;
 }
 
 int main(int argc, char** argv)
