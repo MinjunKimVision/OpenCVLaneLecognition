@@ -28,6 +28,7 @@
 
 #define PI 3.1415926
 #define CAP_TIME 40
+#define FRAME_DIFFER 10
 
 #define ConnerHand 0.8
 #define StraightHand 6
@@ -35,7 +36,7 @@
 int past_value = 0;
 int integralation = 0;
 int derivative = 0;
-float p_value = 0.4, i_value = 0.00, d_value = 0.6;
+float p_value = 0.85, i_value = 0.00, d_value = 0.15;
 
 using namespace std;
 using namespace cv;
@@ -49,11 +50,11 @@ const int YHalf = (Height / 2);
 const int YPoint = 40;
 const int YCarP = 0;
 
-const int RoiWidth_left = 0;
-const int RoiWidth_right = 320;
+const int RoiWidth_left = 20;
+const int RoiWidth_right = 280;
 const int RoiXHalf = (RoiWidth_right / 2);
 
-const float slope_threshold = 0.4;
+const float slope_threshold = 0.3;
 const Scalar Red = Scalar(0, 0, 255);
 const Scalar Blue = Scalar(255, 0, 0);
 const Scalar Yellow = Scalar(50, 250, 250);
@@ -317,8 +318,46 @@ int img_process(Mat& frame)
 //	imshow("roi_gray_ch3", roi_gray_ch3);
 #endif
 	//differ = pid(differ);
-	return differ+11;
+	return differ;
 }
+vector<int> differ_mean_v(25);
+
+
+
+int caculate_mean_differ(int value){
+	double caculate_differ[5] = {0,};
+	int i;
+	double return_differ=0;
+		differ_mean_v.insert(differ_mean_v.begin(),value);
+		differ_mean_v.erase(differ_mean_v.begin()+(int)FRAME_DIFFER);
+		for(i = 0; i<FRAME_DIFFER; i++){
+			if(i>=0 && i<2){
+				caculate_differ[0] += differ_mean_v[i];
+			}
+			else if(i>=2 && i<4){
+                        	caculate_differ[1] += differ_mean_v[i];
+                	}
+			else if(i>=4 && i<6){
+                        	caculate_differ[2] += differ_mean_v[i];
+                	}
+			else if(i>=6 && i<8){
+                        	caculate_differ[3] += differ_mean_v[i];
+                	}
+			else if(i>=8 && i<10){
+                        	caculate_differ[4] += differ_mean_v[i];
+        		}
+		}
+		for(i = 0 ;i<5; i++){
+			caculate_differ[i] = caculate_differ[i]/2.0;
+		}
+		return_differ += caculate_differ[0];
+		for(i = 1; i<5; i++){
+			return_differ += (caculate_differ[i]*0.2*pow(0.5,i-1));
+		}
+		return_differ = return_differ/1.5; 
+	return (int)return_differ;
+}
+
 
 int main(int argc, char** argv)
 {
@@ -376,7 +415,8 @@ int main(int argc, char** argv)
 		resize(frame, frame, Size(Width, Height));
 		differ = img_process(frame);
 #ifdef ROS
-		cam_msg.data = differ;
+		cam_msg.data = caculate_mean_differ(differ)+11;
+		cout<<cam_msg.data<<endl;
 		pub.publish(cam_msg);
 		loop_rate.sleep();
 #else
