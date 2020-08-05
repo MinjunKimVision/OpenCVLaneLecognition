@@ -9,7 +9,8 @@
 #include <termio.h>
 #include <unistd.h>
 #include "std_msgs/Int16.h"
-
+#include <geometry_msgs/Twist.h>
+#include "std_msgs/Int8.h"
 #endif
 #include <cv.hpp>
 /*#include "opencv2/core.hpp"
@@ -28,16 +29,17 @@
 
 #define PI 3.1415926
 #define CAP_TIME 40
-#define FRAME_DIFFER 10
+#define FRAME_DIFFER 25
 
 #define ConnerHand 0.8
-#define StraightHand 6
+#define StraightHand 0
 
-int past_value = 0;
-int integralation = 0;
-int derivative = 0;
-float p_value = 0.85, i_value = 0.00, d_value = 0.15;
-
+double error_differ = 0.0;
+double error_sum = 0.0;
+double P = 0.0;
+double I = 0.0;
+double D = 0.0;
+float p_value = 0.8, i_value = 0.0, d_value = 0.2;
 using namespace std;
 using namespace cv;
 
@@ -62,12 +64,44 @@ const Scalar Sky = Scalar(215, 200, 60);
 const Scalar Pink = Scalar(220, 110, 230);
 
 float ldistance, rdistance;
+double integralation;
+double past_value;
+double derivative;
+
+int flag_start_end = 0;
+int lap_count = 0;
+bool flag = true;
+int check_point_detection(Mat& a) {
+    int pixel_count = 0;
+    int white_point = 0;
+    Mat gray;
+
+    cvtColor(a, gray, COLOR_BGR2GRAY);
+    threshold(gray, gray, 200, 255, THRESH_BINARY);
+    for (int i = 0; i < 240; i++) {
+        white_point = gray.at<uchar>(30, i);
+        if (white_point == 255) {
+            pixel_count++;
+            cout << "pixel:" << pixel_count << endl;
+        }
+    }
+    if (pixel_count > 45 && flag) {
+        flag = false;
+        lap_count++;
+    }
+    if (pixel_count < 10) {
+        flag = true;
+    }
+    return lap_count;
+}
 
 int pid(int value) {
 	derivative = value - past_value;
-	int pid_value = float(p_value * value) + float(i_value * integralation) + float(d_value * derivative);
+	P = p_value*value;
+	I = i_value*integralation;
+	D = d_value*derivative;
+	int pid_value = P+I+D;
 	//std::cout<<pid_value;
-	pid_value = pid_value;
 	past_value = value;
 	//integralation += derivative;
 	// when sended stop signal
@@ -75,6 +109,8 @@ int pid(int value) {
 		//spd = 0;
 		pid_value = 0;
 	}
+
+
 	return pid_value;
 }
 
@@ -177,11 +213,11 @@ void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_li
 		left_b_mem = left_b;
 #ifdef CAMERA_SHOW
 		line(img, Point(left_x0, 0), Point(left_x120, YHalf), Blue, 5);
-		cout << left_lines.size() << " left lines,";
+		//cout << left_lines.size() << " left lines,";
 #endif 
 	}
 	else {
-		cout << "\tNo Left Line,";
+		//cout << "\tNo Left Line,";
 	}
 
 	bool draw_right = find_line_params(right_lines, &right_m, &right_b);
@@ -193,10 +229,10 @@ void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_li
 #ifdef CAMERA_SHOW
 		line(img, Point(right_x0, 0), Point(right_x120, YHalf), Red, 5);
 #endif
-		cout << right_lines.size() << " right lines" << endl;
+		//cout << right_lines.size() << " right lines" << endl;
 	}
 	else {
-		cout << "\tNo RIght Line" << endl;
+		//cout << "\tNo RIght Line" << endl;
 	}
 	// y = mx + b ==> x0 = (y0-b)/m
 	float left_xPt_Y60 = ((-left_b_mem) / left_slope_mem);
@@ -213,7 +249,7 @@ void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_li
 	float r2distance = right_xPt_Y0 - RoiXHalf;
 
 	float lr2differ = l2distance - r2distance;
-	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand+1) {
+	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand) {
 		*ldistance = l1distance / 2;
 		*rdistance = r1distance / 2;
 		cout << "--Straight--" << endl;
@@ -285,7 +321,7 @@ int img_process(Mat& frame)
 	//adaptiveThreshold(dst, dst, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
 	//imshow("adaptiveThreshold_BirdEye", dst);
 	//Canny(open, edge_frame, 80, 230, 7); //min_val, max val , filter size
-
+	check_point_detection(roi);
 	vector<cv::Vec4i> lines_set;
 
 	cv::HoughLinesP(close, lines_set, 1, PI / 180, 30, 25, 5);
@@ -317,48 +353,49 @@ int img_process(Mat& frame)
 //	imshow("frame", frame);
 //	imshow("roi_gray_ch3", roi_gray_ch3);
 #endif
-	//differ = pid(differ);
+//	differ = pid(differ);
 	return differ;
 }
-vector<int> differ_mean_v(25);
+vector<int> differ_mean_v(FRAME_DIFFER);
 
 
 
 int caculate_mean_differ(int value){
-	double caculate_differ[5] = {0,};
+	double caculate_differ[FRAME_DIFFER] = {0,};
 	int i;
 	double return_differ=0;
 		differ_mean_v.insert(differ_mean_v.begin(),value);
 		differ_mean_v.erase(differ_mean_v.begin()+(int)FRAME_DIFFER);
 		for(i = 0; i<FRAME_DIFFER; i++){
-			if(i>=0 && i<2){
+			/*if(i>=0 && i<5){
 				caculate_differ[0] += differ_mean_v[i];
 			}
-			else if(i>=2 && i<4){
+			else if(i>=1 && i<2){
                         	caculate_differ[1] += differ_mean_v[i];
                 	}
-			else if(i>=4 && i<6){
+			else if(i>=2 && i<3){
                         	caculate_differ[2] += differ_mean_v[i];
                 	}
-			else if(i>=6 && i<8){
+			else if(i>=3 && i<4){
                         	caculate_differ[3] += differ_mean_v[i];
                 	}
-			else if(i>=8 && i<10){
+			else if(i>=4 && i<5){
                         	caculate_differ[4] += differ_mean_v[i];
-        		}
+        		}*/
+			caculate_differ[i] = differ_mean_v[i];
 		}
-		for(i = 0 ;i<5; i++){
-			caculate_differ[i] = caculate_differ[i]/2.0;
-		}
+		/*for(i = 0 ;i<FRAME_DIFFER; i++){
+			caculate_differ[i] = caculate_differ[i]/1.0;
+		}*/
 		return_differ += caculate_differ[0];
-		for(i = 1; i<5; i++){
-			return_differ += (caculate_differ[i]*0.2*pow(0.5,i-1));
+		for(i = 1; i<FRAME_DIFFER; i++){
+			return_differ += (caculate_differ[i]*1.0*pow(0.165,i));
 		}
-		return_differ = return_differ/1.5; 
+		return_differ = return_differ/1.20; 
 	return (int)return_differ;
 }
 
-
+struct timespec begin, end;
 int main(int argc, char** argv)
 {
 	VideoCapture cap(0);//cameara_input
@@ -375,26 +412,39 @@ int main(int argc, char** argv)
 	ros::NodeHandle nh;
 	std_msgs::Int16 cam_msg;
 	ros::Publisher pub = nh.advertise<std_msgs::Int16>("cam_msg", 100);
+        ros::init(argc, argv, "msg_key_publisher");
+	 ros::NodeHandle nh3;
+
+        //ros::Publisher pub2 = nh3.advertise<std_msgs::Int8>("data_msg", 100);
+        ros::Publisher pub2 = nh3.advertise<geometry_msgs::Twist>("data_msg_key", 100);
+        //ros::Rate loop_rate(1);
+        geometry_msgs::Twist cmd;
+    std_msgs::Int8 msg2;
+
+        bool turn=true;
 
 	int init_past = 1;
 	//--------------------------------------------------
 	ros::Rate loop_rate(50);
 	cout << "start" << endl;
 #endif
-
 	int differ, key, fr_no = 0;
 	bool capture = true;
-	clock_t curr_t, elasp_t;
-	elasp_t = clock();
+	clock_gettime(CLOCK_MONOTONIC,&begin);
+        int begin_t = (begin.tv_sec+begin.tv_nsec/1000000000.0)*1000.0;
 	//clock_t tStart = clock();
 	for (;;) {
-		curr_t = clock();
-		if (curr_t >= (elasp_t + CAP_TIME)) {
-			cout << CAP_TIME << "ms elasp" << endl;
-			elasp_t = curr_t;
-			continue;
-		}
-		if (capture) {
+		clock_gettime(CLOCK_MONOTONIC,&end);
+                int end_t = (end.tv_sec + end.tv_nsec/1000000000.0)*1000.0;
+                //cout << end_t-begin_t+CAP_TIME << endl;
+		if(end_t<=begin_t+CAP_TIME){
+                        continue;
+                }
+                else {
+                        cout<<"delay :" << end_t-(begin_t+CAP_TIME) << endl;
+                        begin_t = end_t;
+                }
+		if(capture) {
 			cap >> frame;
 			if (frame.empty())
 				break;
@@ -414,9 +464,17 @@ int main(int argc, char** argv)
 		fr_no++;
 		resize(frame, frame, Size(Width, Height));
 		differ = img_process(frame);
+		differ = caculate_mean_differ(differ);
+		//differ = pid(differ);
 #ifdef ROS
-		cam_msg.data = caculate_mean_differ(differ)+11;
-		cout<<cam_msg.data<<endl;
+		cam_msg.data = differ+10;
+		cout<<"differ : "<<cam_msg.data<<"lap_count : "<<lap_count<<endl;
+		if(lap_count == 2){
+			capture = !capture;
+                	turn = !turn;
+                	cmd.linear.y=turn;
+                	pub2.publish(cmd);
+		}
 		pub.publish(cam_msg);
 		loop_rate.sleep();
 #else
