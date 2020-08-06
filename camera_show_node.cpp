@@ -29,12 +29,12 @@
 
 #define PI 3.1415926
 #define CAP_TIME 40
-#define FRAME_DIFFER 25
+#define FRAME_DIFFER 10
 
 #define ConnerHand 0.8
 #define StraightHand 0
 
-double error_differ = 0.0;
+double error_differ = 0.00;
 double error_sum = 0.0;
 double P = 0.0;
 double I = 0.0;
@@ -52,8 +52,8 @@ const int YHalf = (Height / 2);
 const int YPoint = 40;
 const int YCarP = 0;
 
-const int RoiWidth_left = 20;
-const int RoiWidth_right = 280;
+const int RoiWidth_left = 40;
+const int RoiWidth_right = 240;
 const int RoiXHalf = (RoiWidth_right / 2);
 
 const float slope_threshold = 0.3;
@@ -71,16 +71,18 @@ double derivative;
 int flag_start_end = 0;
 int lap_count = 0;
 bool flag = true;
+bool straightFlag = false;
+
 int check_point_detection(Mat& a) {
     int pixel_count = 0;
     int white_point = 0;
     Mat gray;
 
     cvtColor(a, gray, COLOR_BGR2GRAY);
-    threshold(gray, gray, 200, 255, THRESH_BINARY);
+    threshold(gray, gray, 140, 255, THRESH_BINARY);
     for (int i = 0; i < 240; i++) {
         white_point = gray.at<uchar>(30, i);
-        if (white_point == 255) {
+        if (white_point >= 200) {
             pixel_count++;
             cout << "pixel:" << pixel_count << endl;
         }
@@ -92,6 +94,7 @@ int check_point_detection(Mat& a) {
     if (pixel_count < 10) {
         flag = true;
     }
+	imshow("white",gray);
     return lap_count;
 }
 
@@ -249,29 +252,34 @@ void find_lines(Mat& img, vector<cv::Vec4i>& left_lines, vector<Vec4i>& right_li
 	float r2distance = right_xPt_Y0 - RoiXHalf;
 
 	float lr2differ = l2distance - r2distance;
-	if (abs(lr1differ) < StraightHand && abs(lr2differ) < StraightHand) {
-		*ldistance = l1distance / 2;
-		*rdistance = r1distance / 2;
+	/*if (abs(lr1differ) < StraightHand+2 && abs(lr2differ) < StraightHand-2) {
+		*ldistance = l1distance;
+		*rdistance = r1distance;
+		straightFlag = true;
 		cout << "--Straight--" << endl;
 	}
-	else if (lr1differ <= 0 && lr2differ <= 0) {
+	else */if (lr1differ <= 0 && lr2differ <= 0) {
 		//return lr2differ;
 		*ldistance = l1distance;
 		*rdistance = r1distance;
+		//straightFlag =false;
 	}
 	else if (lr1differ <= 0 && lr2differ > 0) {
 		//return lr1differ;
 		*ldistance = l1distance;
 		*rdistance = r1distance;
+		//straightFlag =false;
 	}
 	else if (lr1differ > 0 && lr2differ <= 0) {
 		//return lr1differ;
 		*ldistance = l1distance;
 		*rdistance = r1distance;
+		//straightFlag = false;
 	}
 	else if (lr1differ > 0 && lr2differ > 0) {
 		*ldistance = l1distance;
 		*rdistance = r1distance;
+		//straightFlag = false;
 	}
 	//return (lr1differ+lr2differ)/2;
 }
@@ -281,13 +289,13 @@ int img_process(Mat& frame)
 {
 	Mat grayframe, edge_frame, roi_gray_ch3;
 	Mat roi;
-	Mat kernel = Mat::ones(7, 7, CV_8U);
+	Mat kernel = Mat::ones(17, 17, CV_8U);
 	Mat processed;
 	Mat close, open;
 	//Mat Th;
 	//cvtColor(frame, grayframe, COLOR_BGR2GRAY);
-	Rect rect_roi(RoiWidth_left, YHalf, RoiWidth_right, YHalf - ControlH);
-	roi = frame(rect_roi);
+	//Rect rect_roi(RoiWidth_left, YHalf, RoiWidth_right, YHalf - ControlH);
+	//roi = frame(rect_roi);
 
 	/*Point2f srcVertices[4];
 	srcVertices[0] = Point(35, 2);//왼쪽 위x,y
@@ -306,7 +314,7 @@ int img_process(Mat& frame)
 	warpPerspective(roi, dst, perspectiveMatrix, dst.size(), INTER_LINEAR, BORDER_CONSTANT);*/
 	//imshow("BirdEyeView", dst);
 	//imshow("frame",frame);
-	cvtColor(roi, grayframe, COLOR_BGR2GRAY);
+	cvtColor(frame, grayframe, COLOR_BGR2GRAY);
 	//bilatrealFilter(grayframe,grayframe,3,250,10,BORDER_DEFAULT);//bilateral
 	cvtColor(grayframe, roi_gray_ch3, COLOR_GRAY2BGR);
 	//dilate(grayframe, processed, kernel);
@@ -315,13 +323,12 @@ int img_process(Mat& frame)
 	adaptiveThreshold(open, open, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, -2);*/
 	//imshow("adaptiveThreshold_Open", open);
 	morphologyEx(grayframe, close, MORPH_CLOSE, kernel);
-	adaptiveThreshold(close, close, 180, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, -2.3);
+	adaptiveThreshold(close, close, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 17, -3.0);
 	//threshold(grayframe, Th, 140, 255, THRESH_BINARY);
 	//imshow("Threshold", Th);
 	//adaptiveThreshold(dst, dst, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 3, -1.5);
 	//imshow("adaptiveThreshold_BirdEye", dst);
 	//Canny(open, edge_frame, 80, 230, 7); //min_val, max val , filter size
-	check_point_detection(roi);
 	vector<cv::Vec4i> lines_set;
 
 	cv::HoughLinesP(close, lines_set, 1, PI / 180, 30, 25, 5);
@@ -332,19 +339,19 @@ int img_process(Mat& frame)
 	vector<Vec4i> left_lines;
 	split_left_right(lines_set, left_lines, right_lines);
 #ifdef CAMERA_SHOW
-	show_lines(roi, left_lines, Sky, 2);
-	show_lines(roi, right_lines, Pink, 2);
+	show_lines(frame, left_lines, Sky, 2);
+	show_lines(frame, right_lines, Pink, 2);
 #endif
 	//float ldistance, rdistance;
-	find_lines(roi, left_lines, right_lines, &rdistance, &ldistance);
+	find_lines(frame, left_lines, right_lines, &rdistance, &ldistance);
 	//differ = 4.5*differ;
 		//int differ = ldistance - rdistance;
 	int differ = (ldistance * ConnerHand) - (rdistance * ConnerHand);//differ to float`
 #ifdef CAMERA_SHOW
-	circle(roi, Point(RoiXHalf, YPoint), 5, Scalar(250, 250, 250), -1);
-	circle(roi, Point(RoiXHalf + (int)differ / 4.5, YPoint), 5, Scalar(0, 0, 255), 2);
-	putText(roi, format("%3d - %3d = %f", (int)rdistance, (int)ldistance, (int)differ / 4.5), Point(RoiXHalf - 100, YHalf / 2), FONT_HERSHEY_SIMPLEX, 0.5, Yellow, 2);
-	imshow("roi", roi);
+	circle(frame, Point(RoiXHalf, YPoint), 5, Scalar(250, 250, 250), -1);
+	circle(frame, Point(RoiXHalf + (int)differ, YPoint), 5, Scalar(0, 0, 255), 2);
+	putText(frame, format("%3d - %3d = %f", (int)rdistance, (int)ldistance, (int)differ), Point(RoiXHalf - 100, YHalf / 2), FONT_HERSHEY_SIMPLEX, 0.5, Yellow, 2);
+	imshow("roi", frame);
 	//imshow("Open",open);
 	imshow("Close",close);
 	//imshow("edgeframe",edge_frame);
@@ -354,15 +361,17 @@ int img_process(Mat& frame)
 //	imshow("roi_gray_ch3", roi_gray_ch3);
 #endif
 //	differ = pid(differ);
+	//if(differ>60) differ = 60;
+	//if(differ<-60) differ = -60;
 	return differ;
+
 }
 vector<int> differ_mean_v(FRAME_DIFFER);
-
-
 
 int caculate_mean_differ(int value){
 	double caculate_differ[FRAME_DIFFER] = {0,};
 	int i;
+	float d_differ = 0;
 	double return_differ=0;
 		differ_mean_v.insert(differ_mean_v.begin(),value);
 		differ_mean_v.erase(differ_mean_v.begin()+(int)FRAME_DIFFER);
@@ -389,9 +398,17 @@ int caculate_mean_differ(int value){
 		}*/
 		return_differ += caculate_differ[0];
 		for(i = 1; i<FRAME_DIFFER; i++){
-			return_differ += (caculate_differ[i]*1.0*pow(0.165,i));
+			d_differ += (caculate_differ[i]*1.0*pow(0.05,i));
 		}
-		return_differ = return_differ/1.20; 
+		return_differ = (return_differ)+((d_differ)/1.05);
+		/*if(return_differ<0&&d_differ<0&&straightFlag)
+			return return_differ - d_differ/1.087;
+		if(return_differ>0&&d_differ>0&&straightFlag)
+			return return_differ - d_differ/1.087;
+		else {
+			return_differ = (return_differ)+((d_differ)/1.087);
+			return (int)return_differ;
+		}*/
 	return (int)return_differ;
 }
 
@@ -413,7 +430,7 @@ int main(int argc, char** argv)
 	std_msgs::Int16 cam_msg;
 	ros::Publisher pub = nh.advertise<std_msgs::Int16>("cam_msg", 100);
         ros::init(argc, argv, "msg_key_publisher");
-	 ros::NodeHandle nh3;
+	ros::NodeHandle nh3;
 
         //ros::Publisher pub2 = nh3.advertise<std_msgs::Int8>("data_msg", 100);
         ros::Publisher pub2 = nh3.advertise<geometry_msgs::Twist>("data_msg_key", 100);
@@ -434,6 +451,7 @@ int main(int argc, char** argv)
         int begin_t = (begin.tv_sec+begin.tv_nsec/1000000000.0)*1000.0;
 	//clock_t tStart = clock();
 	for (;;) {
+		Mat roi;
 		clock_gettime(CLOCK_MONOTONIC,&end);
                 int end_t = (end.tv_sec + end.tv_nsec/1000000000.0)*1000.0;
                 //cout << end_t-begin_t+CAP_TIME << endl;
@@ -448,6 +466,9 @@ int main(int argc, char** argv)
 			cap >> frame;
 			if (frame.empty())
 				break;
+			resize(frame, frame, Size(Width, Height));
+			Rect rect_roi(RoiWidth_left, YHalf, RoiWidth_right, YHalf - ControlH);
+        		roi = frame(rect_roi);
 		}
 
 		if ((key = waitKey(30)) >= 0) {
@@ -462,13 +483,13 @@ int main(int argc, char** argv)
 			continue;
 
 		fr_no++;
-		resize(frame, frame, Size(Width, Height));
-		differ = img_process(frame);
+		differ = img_process(roi);
 		differ = caculate_mean_differ(differ);
 		//differ = pid(differ);
 #ifdef ROS
-		cam_msg.data = differ+10;
+		cam_msg.data = differ+7;
 		cout<<"differ : "<<cam_msg.data<<"lap_count : "<<lap_count<<endl;
+		check_point_detection(roi);
 		if(lap_count == 2){
 			capture = !capture;
                 	turn = !turn;
